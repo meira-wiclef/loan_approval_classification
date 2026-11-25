@@ -86,17 +86,31 @@ model_accuracy = accuracy_score(test_targets, predicted_targets)
 status_names = {0: "Rejected (0)",
                 1: "Approved (1)"
 }
+
 print("Model Accuracy:", round(100 * model_accuracy, 3))
-try:
-    custom_income = float(input("\nEnter annual income (person_income): "))
-    custom_loan_amnt = float(input("Enter loan amount (loan_amnt): "))
-    custom_point = [custom_income, custom_loan_amnt]
-    # predicting
-    custom_prediction = predict_knn_label(train_features, train_targets, custom_point, k)
-    readable_pred = status_names.get(custom_prediction, f"Status {custom_prediction}")
-    print(f"Predicted loan_status for income={custom_income}, loan_amnt={custom_loan_amnt}: {readable_pred}")
-except ValueError:
-    print("Please enter valid numeric values for income and loan amount.")
+
+# using elbow method to test for best k
+k_values = range(1, 9)
+accuracies = []
+
+for k in k_values:
+    predicted_targets = [
+        predict_knn_label(train_features, train_targets, test_point, k)
+        for test_point in test_features
+    ]
+    accuracy = accuracy_score(test_targets, predicted_targets)
+    accuracies.append(accuracy)
+
+plt.figure(figsize=(8, 5))
+plt.plot(list(k_values), accuracies, marker="o")
+plt.title("KNN Accuracy Across Different Values of k")
+plt.xlabel("Number of Neighbors (k)")
+plt.ylabel("Accuracy")
+plt.xticks(list(k_values))
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
 
 # plotting the testing and training data
 plt.figure(figsize=(8, 5))
@@ -122,10 +136,22 @@ plt.scatter(
     label="Test points",
 )
 
-plt.title("KNN Loan Approval Classification (k = " + str(k) + ")")
+plt.title("KNN Loan Approval Classification (k = " + str(3) + ")")
 plt.xlabel("Annual Income (person_income)")
 plt.ylabel("Loan Amount (loan_amnt)")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
+# entering new data to determine it's loan status
+try:
+    custom_income = float(input("\nEnter annual income (person_income): "))
+    custom_loan_amnt = float(input("Enter loan amount (loan_amnt): "))
+    custom_point = [custom_income, custom_loan_amnt]
+    # predicting
+    custom_prediction = predict_knn_label(train_features, train_targets, custom_point, k)
+    readable_pred = status_names.get(custom_prediction, f"Status {custom_prediction}")
+    print(f"Predicted loan_status for income={custom_income}, loan_amnt={custom_loan_amnt}: {readable_pred}")
+except ValueError:
+    print("Please enter valid numeric values for income and loan amount.")
