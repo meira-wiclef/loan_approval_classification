@@ -1,7 +1,8 @@
-import matplotlib.pyplot as plt
-import pandas as pd
+import matplotlib.pyplot as plt  # used to plot a graph of the dataset
+import pandas as pd  # used to extra csv
+from sklearn.metrics import accuracy_score  # to calculate percentage of correct predictions
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+
 
 # loading the dataset
 csv_filename = "loan_data.csv"
@@ -16,7 +17,7 @@ cleaned_dataset = raw_dataset.copy()
 for col in feature_columns + [target_column]:
     cleaned_dataset[col] = pd.to_numeric(cleaned_dataset[col], errors="coerce")  # invalid set as NaN
 
-loan_dataset = cleaned_dataset.dropna(subset=feature_columns + [target_column]).head(250)
+loan_dataset = cleaned_dataset.dropna(subset=feature_columns + [target_column]).head(250).sample(frac=1, random_state=42)
 total_records = len(loan_dataset)
 
 print("Usable loan records:", total_records)
@@ -42,10 +43,10 @@ test_targets = testing_records[target_column].astype(int).tolist()
 logistic_model = LogisticRegression()
 logistic_model.fit(train_features, train_targets)  # it's learning the weights of both features and the intercept
 
-predicted_targets = logistic_model.predict(test_features).tolist()
+predicted_targets = logistic_model.predict(test_features).tolist()  # evaluates test set using learned weights = bias
 
 model_accuracy = accuracy_score(test_targets, predicted_targets)
-print("Model Accuracy:", round(model_accuracy, 2))
+print("Model Accuracy:", round(100 * model_accuracy, 2))
 print("Learned weights (w1, w2):", logistic_model.coef_[0])
 print("Intercept (b):", logistic_model.intercept_[0])
 

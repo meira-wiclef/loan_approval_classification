@@ -1,8 +1,8 @@
-from collections import Counter
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from sklearn.metrics import accuracy_score
+from collections import Counter  # counts how often each class label appears
+import matplotlib.pyplot as plt  # used to plot a graph of the dataset
+import numpy as np  # used for vector squaring
+import pandas as pd  # used to extra csv
+from sklearn.metrics import accuracy_score  # to calculate percentage of correct predictions
 
 # loading and preparing the dataset
 csv_filename = "loan_data.csv"
@@ -19,7 +19,7 @@ for col in feature_columns + [target_column]:  # list concatenation, so we can c
     cleaned_dataset[col] = pd.to_numeric(cleaned_dataset[col], errors="coerce")
 
 # dropping invalid rows and keeping a small sample of data
-loan_dataset = cleaned_dataset.dropna(subset=feature_columns + [target_column]).head(250)
+loan_dataset = cleaned_dataset.dropna(subset=feature_columns + [target_column]).head(250).sample(frac=1, random_state=42)
 total_records = len(loan_dataset)
 
 print("Usable loan records:", total_records)
@@ -74,7 +74,7 @@ def predict_knn_label(train_features, train_targets, target_point, num_neighbors
 
 
 # evaluating accuracy with scikit learn
-k = 5
+k = 3
 predicted_targets = []
 
 for current_test_point in test_features:
@@ -82,13 +82,23 @@ for current_test_point in test_features:
     predicted_targets.append(predicted_label)
 
 model_accuracy = accuracy_score(test_targets, predicted_targets)
-print("Model Accuracy:", round(model_accuracy, 3))
 
-# plotting the testing and training data
 status_names = {0: "Rejected (0)",
                 1: "Approved (1)"
-                }
+}
+print("Model Accuracy:", round(100 * model_accuracy, 3))
+try:
+    custom_income = float(input("\nEnter annual income (person_income): "))
+    custom_loan_amnt = float(input("Enter loan amount (loan_amnt): "))
+    custom_point = [custom_income, custom_loan_amnt]
+    # predicting
+    custom_prediction = predict_knn_label(train_features, train_targets, custom_point, k)
+    readable_pred = status_names.get(custom_prediction, f"Status {custom_prediction}")
+    print(f"Predicted loan_status for income={custom_income}, loan_amnt={custom_loan_amnt}: {readable_pred}")
+except ValueError:
+    print("Please enter valid numeric values for income and loan amount.")
 
+# plotting the testing and training data
 plt.figure(figsize=(8, 5))
 
 unique_labels = sorted(training_records[target_column].unique())  # sorts [0,1] in ascending

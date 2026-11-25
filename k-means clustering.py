@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans  # provide k-meanas clustering algorithm
 
 csv_filename = "loan_data.csv"
 raw_dataset = pd.read_csv(csv_filename)
@@ -39,6 +39,27 @@ print("Cluster centroids (person_income, loan_amnt):")
 for i, center in enumerate(centroids):
     print("  Cluster", i, "->", round(center[0], 2), round(center[1], 2))
 
+print("Inertia (k = " + str(num_clusters) + "):", round(kmeans_model.inertia_, 2))
+
+# elbow method across k = 1 to 8
+inertias = []
+k_values = range(1, 9)
+
+for k in k_values:
+    elbow_model = KMeans(n_clusters=k, random_state=random_seed, n_init=10)
+    elbow_model.fit(feature_points)
+    inertias.append(elbow_model.inertia_)
+
+plt.figure(figsize=(8, 5))
+plt.plot(list(k_values), inertias, marker="o")
+plt.title("Elbow Method for Optimal k")
+plt.xlabel("Number of Clusters (k)")
+plt.ylabel("Inertia")
+plt.xticks(list(k_values))
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
 plt.figure(figsize=(8, 5))
 
 for cluster_id in range(num_clusters):
@@ -58,8 +79,8 @@ for cluster_id in range(num_clusters):
     )
 
 plt.scatter(
-    centroids[:, 0],
-    centroids[:, 1],
+    centroids[:, 0],  # x-coordinates of all centroids, takes every row from column 0
+    centroids[:, 1],  # y-coordinates of all centroids, takes every row from column 0
     color="black",
     marker="X",
     s=140,
