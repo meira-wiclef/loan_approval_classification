@@ -14,9 +14,7 @@ income_column = "person_income"  # feature 2
 emp_exp_column = "person_emp_exp"  # feature 3
 loan_amount_column = "loan_amnt"  # feature 4
 interest_rate_column = "loan_int_rate"  # feature 5
-loan_percent_income_column = "loan_percent_income"  # feature 6
-cred_hist_length_column = "cb_person_cred_hist_length"  # feature 7
-credit_score_column = "credit_score"  # feature 8
+credit_score_column = "credit_score"  # feature 6
 target_column = "loan_status"  # the column we are trying to predict
 feature_columns = [
     age_column,
@@ -24,8 +22,6 @@ feature_columns = [
     emp_exp_column,
     loan_amount_column,
     interest_rate_column,
-    loan_percent_income_column,
-    cred_hist_length_column,
     credit_score_column,
 ]  # this is a list of strings
 
@@ -75,7 +71,7 @@ def get_distance_from_record(distance_record):
 
 
 def predict_knn_label(train_features, train_targets, target_point, num_neighbors):
-    neighbor_distances = []
+    neighbor_distances: list[tuple] = []
 
     for index in range(len(train_features)):
         distance = calculate_euclidean_distance(target_point, train_features[index])
@@ -98,9 +94,9 @@ status_names = {0: "Rejected (0)",
                 1: "Approved (1)"
 }
 
-# 2. using elbow method to test for best k
+# 2. testing for best k
 k_values = list(range(1, 15, 2))
-accuracies = []
+accuracies: list[accuracy_score] = []
 
 for k in k_values:
     predicted_targets = [
@@ -113,6 +109,7 @@ for k in k_values:
 best_k = k_values[accuracies.index(max(accuracies))]
 print("Best k from elbow evaluation:", best_k)
 
+# graph showing k values against their accuracies
 plt.figure(figsize=(8, 5))
 plt.plot(k_values, accuracies, marker="o")
 plt.title("KNN Accuracy Across Different Values of k")
@@ -124,14 +121,14 @@ plt.tight_layout()
 plt.show()
 
 # 3. evaluating accuracy with scikit learn and plotting right vs. wrong predictions
-best_predicted_targets = [
+predicted_targets = [
     predict_knn_label(train_features, train_targets, current_test_point, best_k)
     for current_test_point in test_features
 ]
-model_accuracy = accuracy_score(test_targets, best_predicted_targets)
+model_accuracy = accuracy_score(test_targets, predicted_targets)
 print(f"Model Accuracy (k = {best_k}):", round(100 * model_accuracy, 3))
 
-cm = confusion_matrix(test_targets, best_predicted_targets, labels=[0, 1])
+cm = confusion_matrix(test_targets, predicted_targets, labels=[0, 1])
 disp = ConfusionMatrixDisplay(
     confusion_matrix=cm,
     display_labels=[status_names[0], status_names[1]],

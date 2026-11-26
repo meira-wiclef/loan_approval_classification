@@ -13,17 +13,17 @@ raw_dataset = pd.read_csv(csv_filename)  # this is a pandas dataframe
 
 age_column = "person_age"  # feature 1
 income_column = "person_income"  # feature 2
-loan_amount_column = "loan_amnt"  # feature 3
-interest_rate_column = "loan_int_rate"  # feature 4
-loan_percent_income_column = "loan_percent_income"  # feature 5
+emp_exp_column = "person_emp_exp"  # feature 3
+loan_amount_column = "loan_amnt"  # feature 4
+interest_rate_column = "loan_int_rate"  # feature 5
 credit_score_column = "credit_score"  # feature 6
 target_column = "loan_status"  # the column we are trying to predict
 feature_columns = [
     age_column,
     income_column,
+    emp_exp_column,
     loan_amount_column,
     interest_rate_column,
-    loan_percent_income_column,
     credit_score_column,
 ]  # this is a list of strings
 
@@ -46,6 +46,12 @@ train_targets = training_records[target_column].astype(int).tolist()  # 1D array
 
 raw_test_features = testing_records[feature_columns].values.tolist()
 test_targets = testing_records[target_column].astype(int).tolist()
+
+# training averages for comparing applicant inputs against the model's data
+train_means = {
+    col: float(training_records[col].mean())
+    for col in feature_columns
+}
 
 # fitting StandardScaler on training features only to avoid data leakage
 scaler = StandardScaler()
@@ -103,9 +109,9 @@ status_names = {
     1: "Approved (1)",
 }
 
-# finding best k across test points
-k_values = list(range(1, 9))
-accuracies = []
+# 2. testing for best k
+k_values = list(range(1, 15, 2))
+accuracies: list[accuracy_score] = []
 
 for k in k_values:
     predicted_targets = [
@@ -175,24 +181,25 @@ class RoundedLoanApp:
         self.defaults = {
             age_column: "29",
             income_column: "68000",
+            emp_exp_column: "5",
             loan_amount_column: "12000",
             interest_rate_column: "10.5",
-            loan_percent_income_column: "0.18",
             credit_score_column: "690",
         }
 
         self.field_specs = [
             (age_column, "Age (person_age)"),
             (income_column, "Income (person_income)"),
+            (emp_exp_column, "Exp. Yrs (person_emp_exp)"),
             (loan_amount_column, "Loan Amt (loan_amnt)"),
             (interest_rate_column, "Rate % (loan_int_rate)"),
-            (loan_percent_income_column, "Loan/Inc. (loan_pct_income)"),
             (credit_score_column, "Credit (credit_score)"),
         ]
 
         self.entries = {}
         self.current_state = None
         self.btn_hovered = False
+        self.term_months_var = tk.IntVar(value=36)
         self._build_ui()
         self.evaluate_applicant()
 
@@ -222,9 +229,8 @@ class RoundedLoanApp:
         right_col.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         right_col.columnconfigure(0, weight=1, uniform="vis_col")
         right_col.columnconfigure(1, weight=1, uniform="vis_col")
-        right_col.rowconfigure(0, weight=38)
-        right_col.rowconfigure(1, weight=38)
-        right_col.rowconfigure(2, weight=24)
+        right_col.rowconfigure(0, weight=42)
+        right_col.rowconfigure(1, weight=58)
 
         # left column: input card, predict button, compact verdict card
         self.input_canvas = tk.Canvas(left_col, bg=self.bg_main, highlightthickness=0)
@@ -255,30 +261,39 @@ class RoundedLoanApp:
         self.verdict_canvas.grid(row=2, column=0, sticky="ew")
         self.verdict_canvas.bind("<Configure>", lambda _e: self._redraw_verdict())
 
-        # right column: 2 circular gauges, 2 charts, 2 feature displays
+        # right column top row: credit score gauge + adjustable payoff meter
         self.credit_gauge = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
         self.credit_gauge.grid(row=0, column=0, sticky="nsew", padx=(0, 7), pady=(0, 10))
         self.credit_gauge.bind("<Configure>", lambda _e: self._redraw_visuals())
 
-        self.rate_gauge = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
-        self.rate_gauge.grid(row=0, column=1, sticky="nsew", padx=(7, 0), pady=(0, 10))
-        self.rate_gauge.bind("<Configure>", lambda _e: self._redraw_visuals())
+        self.payoff_canvas = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
+        self.payoff_canvas.grid(row=0, column=1, sticky="nsew", padx=(7, 0), pady=(0, 10))
+        self.payoff_canvas.bind("<Configure>", lambda _e: self._redraw_visuals())
 
+        self.term_scale = tk.Scale(
+            self.payoff_canvas,
+            from_=12,
+            to=60,
+            resolution=6,
+            orient="horizontal",
+            variable=self.term_months_var,
+            bg=self.card_bg,
+            fg=self.text_main,
+            troughcolor=self.input_bg,
+            highlightthickness=0,
+            activebackground=self.accent_amber,
+            font=("Segoe UI", 8, "bold"),
+            command=lambda _val: self.evaluate_applicant(),
+        )
+
+        # right column bottom row: income vs loan chart + model averages comparison chart
         self.income_loan_chart = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
-        self.income_loan_chart.grid(row=1, column=0, sticky="nsew", padx=(0, 7), pady=(0, 10))
+        self.income_loan_chart.grid(row=1, column=0, sticky="nsew", padx=(0, 7))
         self.income_loan_chart.bind("<Configure>", lambda _e: self._redraw_visuals())
 
-        self.share_chart = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
-        self.share_chart.grid(row=1, column=1, sticky="nsew", padx=(7, 0), pady=(0, 10))
-        self.share_chart.bind("<Configure>", lambda _e: self._redraw_visuals())
-
-        self.age_display = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
-        self.age_display.grid(row=2, column=0, sticky="nsew", padx=(0, 7))
-        self.age_display.bind("<Configure>", lambda _e: self._redraw_visuals())
-
-        self.pct_display = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
-        self.pct_display.grid(row=2, column=1, sticky="nsew", padx=(7, 0))
-        self.pct_display.bind("<Configure>", lambda _e: self._redraw_visuals())
+        self.averages_chart = tk.Canvas(right_col, bg=self.bg_main, highlightthickness=0)
+        self.averages_chart.grid(row=1, column=1, sticky="nsew", padx=(7, 0))
+        self.averages_chart.bind("<Configure>", lambda _e: self._redraw_visuals())
 
     def _on_btn_enter(self, _event):
         self.btn_hovered = True
@@ -318,7 +333,7 @@ class RoundedLoanApp:
         draw_rounded_rect(c, badge_x1, badge_y1, badge_x2, badge_y2, radius=16, fill="#163334", outline=self.accent_teal, width=1)
         c.create_text(
             (badge_x1 + badge_x2) / 2, h / 2,
-            text=f"Accuracy: {displayed_accuracy:.3f}%",
+            text=f"Accuracy: {accuracies.index(max(accuracies)):.3f}%",
             fill=self.accent_teal, font=("Segoe UI", 11, "bold")
         )
 
@@ -332,10 +347,10 @@ class RoundedLoanApp:
         c.create_text(24, 26, anchor="w", text="Applicant Details", fill=self.text_main, font=("Segoe UI", 13, "bold"))
 
         num_fields = len(self.field_specs)
-        top_offset = 58
-        bottom_padding = 20
-        row_step = max(34, (h - top_offset - bottom_padding) / num_fields)
-        box_h = min(28, row_step - 8)
+        top_offset = 60
+        bottom_padding = 22
+        row_step = max(36, (h - top_offset - bottom_padding) / num_fields)
+        box_h = min(28, row_step - 9)
         box_w = min(145, max(110, int(w * 0.28)))
         box_x2 = w - 24
         box_x1 = box_x2 - box_w
@@ -411,22 +426,21 @@ class RoundedLoanApp:
             st["credit_ratio"],
             self.accent_teal,
         )
-        self._draw_circular_gauge(
-            self.rate_gauge,
-            "Interest Rate Gauge",
-            st["rate_text"],
-            st["rate_ratio"],
-            self.accent_violet,
+        self._draw_payoff_meter(
+            self.payoff_canvas,
+            st["approved"],
+            st["term_months"],
+            st["monthly_payment"],
+            st["total_repayment"],
+            st["interest_rate"],
         )
         self._draw_income_loan_chart(self.income_loan_chart, st["income"], st["loan_amnt"])
-        self._draw_share_chart(self.share_chart, st["pct_ratio"], st["score_ratio"])
-        self._draw_feature_display(self.age_display, "APPLICANT AGE (person_age)", st["age_text"], self.text_main)
-        self._draw_feature_display(self.pct_display, "LOAN / INCOME (loan_pct_income)", st["pct_text"], self.accent_amber)
+        self._draw_averages_chart(self.averages_chart, st["scale_rows"])
 
     def _draw_circular_gauge(self, canvas, title, value_text, ratio, ring_color):
         canvas.delete("all")
         w = max(canvas.winfo_width(), 220)
-        h = max(canvas.winfo_height(), 140)
+        h = max(canvas.winfo_height(), 160)
 
         draw_rounded_rect(canvas, 2, 2, w - 2, h - 2, radius=24, fill=self.card_bg, outline=self.card_border, width=1)
         canvas.create_text(22, 24, anchor="w", text=title, fill=self.text_main, font=("Segoe UI", 11, "bold"))
@@ -434,7 +448,7 @@ class RoundedLoanApp:
         clamped = max(0.0, min(1.0, ratio))
         cx = w / 2
         cy = 34 + (h - 46) / 2
-        r = max(34, min((w - 60) / 2, (h - 68) / 2, 62))
+        r = max(36, min((w - 64) / 2, (h - 72) / 2, 66))
         x0, y0, x1, y1 = cx - r, cy - r, cx + r, cy + r
 
         # background circular track
@@ -447,16 +461,58 @@ class RoundedLoanApp:
         canvas.create_text(cx, cy - 6, text=value_text, fill=self.text_main, font=("Segoe UI", 12, "bold"))
         canvas.create_text(cx, cy + 14, text=f"{round(clamped * 100)}%", fill=self.text_muted, font=("Segoe UI", 9))
 
+    def _draw_payoff_meter(self, canvas, approved, term_months, monthly_payment, total_repayment, rate_pct):
+        canvas.delete("all")
+        w = max(canvas.winfo_width(), 240)
+        h = max(canvas.winfo_height(), 160)
+
+        draw_rounded_rect(canvas, 2, 2, w - 2, h - 2, radius=24, fill=self.card_bg, outline=self.card_border, width=1)
+        canvas.create_text(22, 24, anchor="w", text="Approved Payoff Meter", fill=self.text_main, font=("Segoe UI", 11, "bold"))
+
+        canvas.create_text(
+            22, 52, anchor="w",
+            text=f"Repayment Term: {term_months} mos  (Rate: {rate_pct:g}%)",
+            fill=self.text_muted, font=("Segoe UI", 9, "bold")
+        )
+
+        # place adjustable slider inside the card
+        scale_w = max(140, int(w - 44))
+        self.term_scale.place(x=22, y=68, width=scale_w, height=40)
+
+        info_y = 124
+        if approved:
+            canvas.create_text(
+                22, info_y, anchor="w",
+                text=f"Est. Total: ${total_repayment:,.0f}   |   Monthly: ${monthly_payment:,.0f}/mo",
+                fill=self.approve_color, font=("Segoe UI", 10, "bold")
+            )
+            canvas.create_text(
+                22, info_y + 20, anchor="w",
+                text="Slide term (12–60 months) to preview interest cost if approved",
+                fill=self.text_muted, font=("Segoe UI", 8)
+            )
+        else:
+            canvas.create_text(
+                22, info_y, anchor="w",
+                text="Loan not approved — slider still previews hypothetical cost",
+                fill=self.reject_color, font=("Segoe UI", 9, "bold")
+            )
+            canvas.create_text(
+                22, info_y + 20, anchor="w",
+                text=f"If approved at {rate_pct:g}% over {term_months}m: ${total_repayment:,.0f} (${monthly_payment:,.0f}/mo)",
+                fill=self.text_muted, font=("Segoe UI", 8)
+            )
+
     def _draw_income_loan_chart(self, canvas, income, loan_amnt):
         canvas.delete("all")
         w = max(canvas.winfo_width(), 220)
-        h = max(canvas.winfo_height(), 140)
+        h = max(canvas.winfo_height(), 180)
 
         draw_rounded_rect(canvas, 2, 2, w - 2, h - 2, radius=24, fill=self.card_bg, outline=self.card_border, width=1)
         canvas.create_text(22, 24, anchor="w", text="Income vs. Loan Chart", fill=self.text_main, font=("Segoe UI", 11, "bold"))
 
-        base_y = h - 36
-        max_bar_h = max(36, h - 92)
+        base_y = h - 38
+        max_bar_h = max(44, h - 102)
         max_val = max(income, loan_amnt, 1.0)
         inc_h = max(10, int((income / max_val) * max_bar_h))
         loan_h = max(10, int((loan_amnt / max_val) * max_bar_h))
@@ -470,74 +526,79 @@ class RoundedLoanApp:
 
         # income bar
         draw_rounded_rect(canvas, inc_cx - bar_w / 2, base_y - inc_h, inc_cx + bar_w / 2, base_y, radius=10, fill=self.accent_teal, outline="")
-        canvas.create_text(inc_cx, base_y + 15, text="Income", fill=self.text_muted, font=("Segoe UI", 9))
+        canvas.create_text(inc_cx, base_y + 16, text="Income", fill=self.text_muted, font=("Segoe UI", 9))
         canvas.create_text(inc_cx, base_y - inc_h - 11, text=f"{income:,.0f}", fill=self.text_main, font=("Segoe UI", 9, "bold"))
 
         # loan bar
         draw_rounded_rect(canvas, loan_cx - bar_w / 2, base_y - loan_h, loan_cx + bar_w / 2, base_y, radius=10, fill=self.accent_violet, outline="")
-        canvas.create_text(loan_cx, base_y + 15, text="Loan", fill=self.text_muted, font=("Segoe UI", 9))
+        canvas.create_text(loan_cx, base_y + 16, text="Loan", fill=self.text_muted, font=("Segoe UI", 9))
         canvas.create_text(loan_cx, base_y - loan_h - 11, text=f"{loan_amnt:,.0f}", fill=self.text_main, font=("Segoe UI", 9, "bold"))
 
-    def _draw_share_chart(self, canvas, pct_ratio, score_ratio):
+    def _draw_averages_chart(self, canvas, scale_rows):
         canvas.delete("all")
-        w = max(canvas.winfo_width(), 220)
-        h = max(canvas.winfo_height(), 140)
+        w = max(canvas.winfo_width(), 240)
+        h = max(canvas.winfo_height(), 180)
 
         draw_rounded_rect(canvas, 2, 2, w - 2, h - 2, radius=24, fill=self.card_bg, outline=self.card_border, width=1)
-        canvas.create_text(22, 24, anchor="w", text="Loan Burden & Credit Chart", fill=self.text_main, font=("Segoe UI", 11, "bold"))
+        canvas.create_text(22, 24, anchor="w", text="Applicant vs. Model Avg (Scaled)", fill=self.text_main, font=("Segoe UI", 11, "bold"))
 
-        track_x1 = 24
-        track_x2 = w - 24
-        track_span = max(40, track_x2 - track_x1)
-        bar_h = 18
+        # legend
+        canvas.create_rectangle(w - 155, 19, w - 143, 29, fill=self.accent_amber, outline="")
+        canvas.create_text(w - 138, 24, anchor="w", text="Applicant", fill=self.text_muted, font=("Segoe UI", 8))
+        canvas.create_rectangle(w - 82, 19, w - 70, 29, fill=self.accent_violet, outline="")
+        canvas.create_text(w - 65, 24, anchor="w", text="Avg", fill=self.text_muted, font=("Segoe UI", 8))
 
-        y1_lbl = 54
-        y1_bar = 68
-        y2_lbl = 106
-        y2_bar = 120
+        if not scale_rows:
+            return
 
-        # loan/income proportion bar
-        canvas.create_text(track_x1, y1_lbl, anchor="w", text=f"Loan / Income: {pct_ratio * 100:.1f}%", fill=self.text_muted, font=("Segoe UI", 9))
-        draw_rounded_rect(canvas, track_x1, y1_bar, track_x2, y1_bar + bar_h, radius=9, fill="#283148", outline="")
-        fill_w1 = max(16, int(track_x1 + pct_ratio * track_span))
-        draw_rounded_rect(canvas, track_x1, y1_bar, fill_w1, y1_bar + bar_h, radius=9, fill=self.accent_amber, outline="")
+        left_x = 22
+        right_x = w - 22
+        bar_area_x1 = 118
+        bar_area_x2 = right_x - 8
+        bar_span = max(40, bar_area_x2 - bar_area_x1)
 
-        # credit score proportion bar
-        canvas.create_text(track_x1, y2_lbl, anchor="w", text=f"Credit Score Strength: {round(score_ratio * 100)}%", fill=self.text_muted, font=("Segoe UI", 9))
-        draw_rounded_rect(canvas, track_x1, y2_bar, track_x2, y2_bar + bar_h, radius=9, fill="#283148", outline="")
-        fill_w2 = max(16, int(track_x1 + score_ratio * track_span))
-        draw_rounded_rect(canvas, track_x1, y2_bar, fill_w2, y2_bar + bar_h, radius=9, fill=self.accent_teal, outline="")
+        top_y = 48
+        row_h = max(26, (h - top_y - 16) / len(scale_rows))
 
-    def _draw_feature_display(self, canvas, title, value_str, accent):
-        canvas.delete("all")
-        w = max(canvas.winfo_width(), 220)
-        h = max(canvas.winfo_height(), 86)
+        for idx, (label, user_val, avg_val, max_scale) in enumerate(scale_rows):
+            y_mid = top_y + idx * row_h + row_h / 2
+            canvas.create_text(left_x, y_mid, anchor="w", text=label, fill=self.text_muted, font=("Segoe UI", 8, "bold"))
 
-        draw_rounded_rect(canvas, 2, 2, w - 2, h - 2, radius=24, fill=self.card_bg, outline=self.card_border, width=1)
-        canvas.create_text(22, h * 0.28, anchor="w", text=title, fill=self.text_muted, font=("Segoe UI", 9, "bold"))
-        canvas.create_text(22, h * 0.64, anchor="w", text=value_str, fill=accent, font=("Segoe UI", 20, "bold"))
+            u_ratio = max(0.0, min(1.0, user_val / max_scale))
+            a_ratio = max(0.0, min(1.0, avg_val / max_scale))
+
+            # applicant bar (top half of row)
+            canvas.create_rectangle(bar_area_x1, y_mid - 8, bar_area_x2, y_mid - 1, fill="#283148", outline="")
+            u_end = max(bar_area_x1 + 4, bar_area_x1 + u_ratio * bar_span)
+            canvas.create_rectangle(bar_area_x1, y_mid - 8, u_end, y_mid - 1, fill=self.accent_amber, outline="")
+
+            # training average bar (bottom half of row)
+            canvas.create_rectangle(bar_area_x1, y_mid + 1, bar_area_x2, y_mid + 8, fill="#283148", outline="")
+            a_end = max(bar_area_x1 + 4, bar_area_x1 + a_ratio * bar_span)
+            canvas.create_rectangle(bar_area_x1, y_mid + 1, a_end, y_mid + 8, fill=self.accent_violet, outline="")
 
     def evaluate_applicant(self):
+        term_months = max(1, int(self.term_months_var.get()))
         try:
             custom_age = float(self.entries[age_column].get())
             custom_income = float(self.entries[income_column].get())
+            custom_emp_exp = float(self.entries[emp_exp_column].get())
             custom_loan_amnt = float(self.entries[loan_amount_column].get())
             custom_interest_rate = float(self.entries[interest_rate_column].get())
-            custom_loan_percent_income = float(self.entries[loan_percent_income_column].get())
             custom_credit_score = float(self.entries[credit_score_column].get())
         except ValueError:
             self.current_state = {
                 "verdict": ("INVALID INPUT", "Enter valid numbers in all 6 fields", None),
+                "approved": False,
                 "credit_text": "--",
                 "credit_ratio": 0.0,
-                "rate_text": "--",
-                "rate_ratio": 0.0,
+                "term_months": term_months,
+                "monthly_payment": 0.0,
+                "total_repayment": 0.0,
+                "interest_rate": 0.0,
                 "income": 0.0,
                 "loan_amnt": 0.0,
-                "pct_ratio": 0.0,
-                "score_ratio": 0.0,
-                "age_text": "--",
-                "pct_text": "--",
+                "scale_rows": [],
             }
             self._redraw_verdict()
             self._redraw_visuals()
@@ -546,9 +607,9 @@ class RoundedLoanApp:
         custom_point = [
             custom_age,
             custom_income,
+            custom_emp_exp,
             custom_loan_amnt,
             custom_interest_rate,
-            custom_loan_percent_income,
             custom_credit_score,
         ]
         scaled_custom_point = scaler.transform([custom_point])[0].tolist()
@@ -558,26 +619,48 @@ class RoundedLoanApp:
         vote_summary = get_neighbor_vote_summary(
             train_features, train_targets, scaled_custom_point, best_k, custom_prediction
         )
+        is_approved = custom_prediction == 1
 
-        pct_ratio = max(0.0, min(1.0, custom_loan_percent_income if custom_loan_percent_income <= 1.5 else custom_loan_percent_income / 100.0))
+        # standard amortization formula using the interest rate and selected term
+        monthly_rate = (custom_interest_rate / 100.0) / 12.0
+        if custom_loan_amnt <= 0:
+            monthly_payment = 0.0
+            total_repayment = 0.0
+        elif monthly_rate > 0:
+            factor = (1.0 + monthly_rate) ** term_months
+            monthly_payment = custom_loan_amnt * (monthly_rate * factor) / (factor - 1.0)
+            total_repayment = monthly_payment * term_months
+        else:
+            monthly_payment = custom_loan_amnt / term_months
+            total_repayment = custom_loan_amnt
+
         score_ratio = max(0.0, min(1.0, (custom_credit_score - 300) / 550.0))
+
+        scale_rows = [
+            ("Age", custom_age, train_means[age_column], 70.0),
+            ("Income", custom_income, train_means[income_column], 150000.0),
+            ("Exp. Yrs", custom_emp_exp, train_means[emp_exp_column], 30.0),
+            ("Loan Amt", custom_loan_amnt, train_means[loan_amount_column], 40000.0),
+            ("Rate %", custom_interest_rate, train_means[interest_rate_column], 25.0),
+            ("Credit", custom_credit_score, train_means[credit_score_column], 850.0),
+        ]
 
         self.current_state = {
             "verdict": (
                 readable_prediction,
                 vote_summary,
-                custom_prediction == 1,
+                is_approved,
             ),
+            "approved": is_approved,
             "credit_text": f"{custom_credit_score:g}",
             "credit_ratio": score_ratio,
-            "rate_text": f"{custom_interest_rate:g}%",
-            "rate_ratio": custom_interest_rate / 25.0,
+            "term_months": term_months,
+            "monthly_payment": monthly_payment,
+            "total_repayment": total_repayment,
+            "interest_rate": custom_interest_rate,
             "income": custom_income,
             "loan_amnt": custom_loan_amnt,
-            "pct_ratio": pct_ratio,
-            "score_ratio": score_ratio,
-            "age_text": f"{custom_age:g} yrs",
-            "pct_text": f"{custom_loan_percent_income * 100:.1f}%" if custom_loan_percent_income <= 1.5 else f"{custom_loan_percent_income:g}%",
+            "scale_rows": scale_rows,
         }
 
         self._redraw_verdict()
