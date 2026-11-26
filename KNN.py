@@ -9,19 +9,33 @@ from sklearn.preprocessing import StandardScaler  # standardizes features so lar
 csv_filename = "loan_data.csv"
 raw_dataset = pd.read_csv(csv_filename)  # this is a pandas dataframe
 
-income_column = "person_income"  # feature 1
-loan_amount_column = "loan_amnt"  # feature 2
-credit_score_column = "credit_score"  # feature 3
+age_column = "person_age"  # feature 1
+income_column = "person_income"  # feature 2
+emp_exp_column = "person_emp_exp"  # feature 3
+loan_amount_column = "loan_amnt"  # feature 4
+interest_rate_column = "loan_int_rate"  # feature 5
+loan_percent_income_column = "loan_percent_income"  # feature 6
+cred_hist_length_column = "cb_person_cred_hist_length"  # feature 7
+credit_score_column = "credit_score"  # feature 8
 target_column = "loan_status"  # the column we are trying to predict
-feature_columns = [income_column, loan_amount_column, credit_score_column]  # this is a list of strings
+feature_columns = [
+    age_column,
+    income_column,
+    emp_exp_column,
+    loan_amount_column,
+    interest_rate_column,
+    loan_percent_income_column,
+    cred_hist_length_column,
+    credit_score_column,
+]  # this is a list of strings
 
 cleaned_dataset = raw_dataset.copy()
-for col in feature_columns + [target_column]:  # list concatenation, so we can clean all 4 columns at once
+for col in feature_columns + [target_column]:  # list concatenation, so we can clean all 9 columns at once
     # converts each column to numbers and converts any invalid ones to NaN
     cleaned_dataset[col] = pd.to_numeric(cleaned_dataset[col], errors="coerce")
 
 # dropping invalid rows and keeping a small sample of data
-loan_dataset = cleaned_dataset.dropna(subset=feature_columns + [target_column]).head(600).sample(frac=1, random_state=42)
+loan_dataset = cleaned_dataset.dropna(subset=feature_columns + [target_column]).head(700).sample(frac=1, random_state=42)
 total_records = len(loan_dataset)
 
 print("Usable loan records:", total_records)
@@ -85,7 +99,7 @@ status_names = {0: "Rejected (0)",
 }
 
 # 2. using elbow method to test for best k
-k_values = list(range(1, 9))
+k_values = list(range(1, 15, 2))
 accuracies = []
 
 for k in k_values:
@@ -96,7 +110,7 @@ for k in k_values:
     accuracy = accuracy_score(test_targets, predicted_targets)
     accuracies.append(accuracy)
 
-best_k = k_values[int(np.argmax(accuracies))]
+best_k = k_values[accuracies.index(max(accuracies))]
 print("Best k from elbow evaluation:", best_k)
 
 plt.figure(figsize=(8, 5))
@@ -130,14 +144,32 @@ plt.show()
 
 # 4. entering new data to determine its loan status
 try:
-    custom_income = float(input("\nEnter annual income (person_income): "))
+    custom_age = float(input("\nEnter age (person_age): "))
+    custom_income = float(input("Enter annual income (person_income): "))
+    custom_emp_exp = float(input("Enter employment experience in years (person_emp_exp): "))
     custom_loan_amnt = float(input("Enter loan amount (loan_amnt): "))
+    custom_interest_rate = float(input("Enter loan interest rate (loan_int_rate): "))
+    custom_loan_percent_income = float(input("Enter loan percent of income (loan_percent_income): "))
+    custom_cred_hist_length = float(input("Enter credit history length in years (cb_person_cred_hist_length): "))
     custom_credit_score = float(input("Enter credit score (credit_score): "))
-    custom_point = [custom_income, custom_loan_amnt, custom_credit_score]
+    custom_point = [
+        custom_age,
+        custom_income,
+        custom_emp_exp,
+        custom_loan_amnt,
+        custom_interest_rate,
+        custom_loan_percent_income,
+        custom_cred_hist_length,
+        custom_credit_score,
+    ]
     scaled_custom_point = scaler.transform([custom_point])[0].tolist()
     # predicting
     custom_prediction = predict_knn_label(train_features, train_targets, scaled_custom_point, best_k)
     readable_prediction = status_names.get(custom_prediction, f"Status {custom_prediction}")
-    print(f"Predicted loan_status for income={custom_income}, loan_amnt={custom_loan_amnt}, credit_score={custom_credit_score}: {readable_prediction}")
+    print(
+        f"Predicted loan_status for age={custom_age}, income={custom_income}, emp_exp={custom_emp_exp}, "
+        f"loan_amnt={custom_loan_amnt}, int_rate={custom_interest_rate}, loan_percent_income={custom_loan_percent_income}, "
+        f"cred_hist_length={custom_cred_hist_length}, credit_score={custom_credit_score}: {readable_prediction}"
+    )
 except ValueError:
-    print("Please enter valid numeric values for income, loan amount, and credit score.")
+    print("Please enter valid numeric values for all applicant features.")
